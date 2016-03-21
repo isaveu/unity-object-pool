@@ -47,6 +47,24 @@ namespace UnityEngine
             dirty = true;
         }
 
+        public void warmPool(GameObject o, int size)
+        {
+            if (prefabLookup.ContainsKey(o))
+            {
+                throw new Exception("Pool for prefab " + o.name + " has already been created");
+            }
+            var pool = new ObjectPool<Object>(() => { 
+                GameObject go = InstantiatePrefab(o);
+
+                // sleep at the warm it up, it is reactivated when it is spawned.
+                go.SetActive(false);
+                return go;
+            }, size);
+            prefabLookup[o] = pool;
+
+            dirty = true;
+        }
+
         public GameObject spawnObject(GameObject prefab)
         {
             return spawnObject(prefab, Vector3.zero, Quaternion.identity);
@@ -80,6 +98,8 @@ namespace UnityEngine
             var clone = pool.GetItem() as GameObject;
             clone.transform.position = position;
             clone.transform.rotation = rotation;
+
+            // Reactivate when it is spawned.
             clone.SetActive(true);
 
             instanceLookup.Add(clone, pool);
@@ -122,16 +142,23 @@ namespace UnityEngine
 
         private Object InstantiatePrefab(Object o)
         {
-            var inst = Instantiate(o) as Object;
+            return Instantiate(o) as Object;
+        }
+
+        private GameObject InstantiatePrefab(GameObject o)
+        {
+            var go = GameObject.Instantiate(o);
             if (root != null)
             {
-                if (o.GetType() == typeof(GameObject))
-                {
-                    GameObject go = inst as GameObject;
-                    go.transform.parent = root;
-                }
+                go.transform.parent = root;
             }
-            return inst;
+            else
+            {
+                // To prevent being destroyed when a scene is loaded or unloaded.
+                go.transform.parent = this.gameObject.transform;
+            }
+
+            return go;
         }
 
         public void PrintStatus()
@@ -149,9 +176,19 @@ namespace UnityEngine
             Instance.warmPool(o, size);
         }
 
+        public static void WarmPool(GameObject o, int size)
+        {
+            Instance.warmPool(o, size);
+        }
+
         public static Object SpawnObject(Object o)
         {
             return Instance.spawnObject(o);
+        }
+
+        public static GameObject SpawnObject(GameObject go)
+        {
+            return Instance.spawnObject(go, Vector3.zero, Quaternion.identity);
         }
 
         public static GameObject SpawnObject(GameObject prefab, Vector3 position, Quaternion rotation)
